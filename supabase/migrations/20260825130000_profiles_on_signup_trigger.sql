@@ -1,0 +1,20 @@
+-- Automatically create a profiles row whenever a new auth.users row is
+-- inserted, so profiles stays in sync with signups without a custom
+-- signup endpoint. New users default to the 'buyer' role.
+
+create function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, role, display_name)
+  values (new.id, 'buyer', new.raw_user_meta_data ->> 'display_name');
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
