@@ -1,6 +1,6 @@
 const emailProvider = require('../lib/emailProvider');
 
-const BUSINESS_EMAIL = 'hello@thecollectorsmarket.co.uk';
+const BUSINESS_EMAIL = 'kingharrison1999@gmail.com';
 
 // Message content is free-text from an anonymous visitor -- escape before
 // interpolating into the HTML email body.
