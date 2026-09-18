@@ -1,6 +1,6 @@
 # marketplace-backend-starter
 
-Backend API for Andy's Marketplace.
+Backend API for Marketplace.
 
 ## Setup
 
