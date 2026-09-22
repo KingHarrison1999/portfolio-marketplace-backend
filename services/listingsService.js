@@ -36,10 +36,15 @@ function attachImages(listing) {
 async function getListingById(id) {
   const { data, error } = await supabase
     .from('listings')
-    .select('*, listing_images(id, image_url, sort_order)')
+    .select('*, listing_images(id, image_url, sort_order), profiles(display_name)')
     .eq('id', id)
     .order('sort_order', { foreignTable: 'listing_images' })
     .maybeSingle();
+
+  if (data) {
+    data.seller_display_name = data.profiles?.display_name ?? null;
+    delete data.profiles;
+  }
 
   return { data: attachImages(data), error };
 }
