@@ -91,10 +91,10 @@ test('profile: PATCH updates display_name, bio, and avatar_url', async () => {
   const res = await request(app)
     .patch('/api/profile')
     .set('Authorization', `Bearer ${buyer1.token}`)
-    .send({ display_name: 'Test Buyer One', bio: 'I collect diecast cars.', avatar_url: 'https://example.com/a.png' });
+    .send({ display_name: 'Test Buyer One', bio: 'I collect vintage denim jackets.', avatar_url: 'https://example.com/a.png' });
   assert.equal(res.status, 200);
   assert.equal(res.body.profile.display_name, 'Test Buyer One');
-  assert.equal(res.body.profile.bio, 'I collect diecast cars.');
+  assert.equal(res.body.profile.bio, 'I collect vintage denim jackets.');
   assert.equal(res.body.profile.avatar_url, 'https://example.com/a.png');
 });
 

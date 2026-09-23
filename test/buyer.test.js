@@ -106,13 +106,13 @@ before(async () => {
   addressId = addressRes.body.address.id;
 
   listingA = await createListing(seller.id, {
-    title: 'Alpha Diecast Car',
+    title: 'Alpha Vintage Jacket',
     price: 20,
     stock: 10,
     category_id: categoryId,
   });
   listingB = await createListing(seller.id, {
-    title: 'Beta Diecast Truck',
+    title: 'Beta Vintage Boots',
     price: 50,
     stock: 2,
     category_id: categoryId2,

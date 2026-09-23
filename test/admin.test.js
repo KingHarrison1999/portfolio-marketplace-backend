@@ -323,7 +323,7 @@ test('ad-spaces: admin can create an ad space', async () => {
     .set('Authorization', `Bearer ${adminUser.token}`)
     .send({
       owner_id: seller.id,
-      business_name: 'Test Diecast Co',
+      business_name: 'Test Vintage Co',
       placement: 'homepage-hero',
       image_url: 'https://example.com/ad.png',
       click_through_url: 'https://example.com',
@@ -332,7 +332,7 @@ test('ad-spaces: admin can create an ad space', async () => {
       price: 99.99,
     });
   assert.equal(res.status, 201);
-  assert.equal(res.body.ad_space.business_name, 'Test Diecast Co');
+  assert.equal(res.body.ad_space.business_name, 'Test Vintage Co');
   assert.equal(res.body.ad_space.is_active, true);
   adSpace = res.body.ad_space;
   createdAdSpaceIds.push(adSpace.id);

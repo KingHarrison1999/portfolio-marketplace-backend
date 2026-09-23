@@ -1,4 +1,4 @@
--- Categories, self-referencing for subcategories (e.g. diecast / trading cards / lego).
+-- Categories, self-referencing for subcategories (e.g. dresses / denim / footwear).
 
 create table public.categories (
   id uuid primary key default gen_random_uuid(),

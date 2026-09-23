@@ -88,7 +88,7 @@ test('buyer role is rejected with 403', async () => {
 
 test('seller can create a listing owned by themselves', async () => {
   const res = await request(app).post('/api/listings').set('Authorization', `Bearer ${sellerA.token}`).send({
-    title: 'Test Diecast Car',
+    title: 'Test Vintage Jacket',
     description: 'A test listing',
     price: 19.99,
     condition: 'new',
@@ -98,7 +98,7 @@ test('seller can create a listing owned by themselves', async () => {
 
   assert.equal(res.status, 201);
   assert.equal(res.body.listing.seller_id, sellerA.id);
-  assert.equal(res.body.listing.title, 'Test Diecast Car');
+  assert.equal(res.body.listing.title, 'Test Vintage Jacket');
   assert.equal(res.body.listing.status, 'draft');
   createdListingIds.push(res.body.listing.id);
 });
@@ -135,7 +135,7 @@ test('seller cannot blank out their own listing\'s title via PATCH', async () =>
   assert.equal(res.body.error, 'title cannot be empty');
 
   const { data: unchanged } = await admin.from('listings').select('title').eq('id', createdListingIds[0]).single();
-  assert.equal(unchanged.title, 'Test Diecast Car', 'title must be untouched after the rejected update');
+  assert.equal(unchanged.title, 'Test Vintage Jacket', 'title must be untouched after the rejected update');
 });
 
 test('a different seller gets 403 updating a listing they do not own', async () => {
