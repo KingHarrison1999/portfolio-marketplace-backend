@@ -273,6 +273,11 @@ async function createPaymentSession(buyerId, checkoutGroupId) {
       currency: session.currency,
       session_id: session.session_id,
       redirect_url: session.redirect_url,
+      payment_connected: false,
+      message:
+        'Payments are not connected yet in this demo -- there is no real payment provider behind this. ' +
+        'This session is simulated so the rest of the order flow (confirmation, stock updates, order history) ' +
+        'can still be tested end-to-end.',
     },
     error: null,
   };

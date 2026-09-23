@@ -270,7 +270,9 @@ test('checkout/pay: creates a payment session for the sum of sibling orders', as
   assert.equal(Number(res.body.amount), 44);
   assert.equal(res.body.currency, 'GBP');
   assert.ok(res.body.session_id);
-  assert.ok(res.body.redirect_url);
+  assert.equal(res.body.redirect_url, null, 'no real payment page exists -- must not hand back a fake redirect');
+  assert.equal(res.body.payment_connected, false, 'must tell the caller honestly that no real provider is wired up');
+  assert.ok(res.body.message, 'must explain why in a message the frontend can show the buyer');
 
   const { data: order } = await admin
     .from('orders')
