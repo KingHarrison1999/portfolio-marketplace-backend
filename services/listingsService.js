@@ -103,11 +103,45 @@ function toIlikePattern(term) {
   return `%${escaped}%`;
 }
 
-async function searchListings({ categoryIds, minPrice, maxPrice, q, sort, page, limit }) {
+// "New Arrivals" is a fixed-size curated shelf -- the newest active
+// listings across every category -- not a real category or a paginated
+// browse. See searchListings() below.
+const NEW_ARRIVALS_COUNT = 16;
+
+async function searchListings({ categoryIds, minPrice, maxPrice, q, sort, page, limit, collection }) {
+  // Ignores category/price/search/sort/pagination inputs entirely -- it's
+  // always "the newest N active listings, full stop", not something you
+  // browse deeper into.
+  if (collection === 'new-arrivals') {
+    const { data, error } = await supabase
+      .from('listings')
+      .select('*, listing_images(image_url, sort_order)')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .order('sort_order', { foreignTable: 'listing_images', ascending: true })
+      .limit(1, { foreignTable: 'listing_images' })
+      .range(0, NEW_ARRIVALS_COUNT - 1);
+
+    if (data) {
+      for (const listing of data) {
+        listing.primary_image_url = listing.listing_images?.[0]?.image_url ?? null;
+        delete listing.listing_images;
+      }
+    }
+    return { data, error, count: data ? data.length : 0 };
+  }
+
   let query = supabase
     .from('listings')
     .select('*, listing_images(image_url, sort_order)', { count: 'exact' })
     .eq('status', 'active');
+
+  // "Secondhand" is a computed filter (condition isn't "new"), layered on
+  // top of the normal filters rather than replacing them -- it can still
+  // be combined with category/price/search/sort/pagination.
+  if (collection === 'secondhand') {
+    query = query.neq('condition', 'new');
+  }
 
   if (categoryIds && categoryIds.length > 0) {
     query = query.in('category_id', categoryIds);

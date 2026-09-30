@@ -12,6 +12,8 @@
     "seed:vintage-fashion": "node scripts/seed-vintage-fashion.js",
     "seed:category-taxonomy": "node scripts/seed-category-taxonomy.js",
     "seed:womens-clothing-item-types": "node scripts/add-womens-clothing-item-types.js",
+    "categories:remove-computed-filters": "node scripts/remove-computed-filter-categories.js",
+    "seed:gap-fill-listings": "node scripts/seed-gap-fill-listings.js",
     "test": "node --test --test-concurrency=1 test/listings.test.js test/buyer.test.js test/payments.test.js test/admin.test.js test/account.test.js test/misc.test.js"
   },
   "keywords": [],

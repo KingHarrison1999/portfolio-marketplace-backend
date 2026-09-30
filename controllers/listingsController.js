@@ -35,6 +35,8 @@ async function browse(req, res) {
   const minPrice = req.query.min_price !== undefined ? Number(req.query.min_price) : undefined;
   const maxPrice = req.query.max_price !== undefined ? Number(req.query.max_price) : undefined;
 
+  const collection = ['new-arrivals', 'secondhand'].includes(req.query.collection) ? req.query.collection : undefined;
+
   const { data, error, count } = await listingsService.searchListings({
     categoryIds: parseCategoryIds(req.query.category_id),
     minPrice: Number.isFinite(minPrice) ? minPrice : undefined,
@@ -43,10 +45,16 @@ async function browse(req, res) {
     sort: req.query.sort,
     page,
     limit,
+    collection,
   });
 
   if (error) {
     return res.status(500).json({ error: 'Failed to search listings' });
+  }
+
+  if (collection === 'new-arrivals') {
+    // A fixed-size curated shelf -- page/limit don't apply.
+    return res.json({ listings: data, total: count });
   }
 
   res.json({ listings: data, total: count, page, limit });
