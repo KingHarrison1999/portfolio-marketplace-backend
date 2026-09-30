@@ -1,6 +1,5 @@
 require('dotenv').config({ quiet: true });
 
-const crypto = require('crypto');
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { createClient } = require('@supabase/supabase-js');
@@ -13,7 +12,6 @@ const anon = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KE
 
 const TEST_PASSWORD = 'Test-Password-123!';
 const TEST_COMMISSION_RATE = 0.1;
-const WEBHOOK_SECRET = process.env.OPTIMISE_PAYMENTS_WEBHOOK_SECRET;
 
 async function createTestUser(label, role) {
   const email = `test-payments-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
@@ -45,23 +43,6 @@ async function createListing(sellerId, overrides = {}) {
   return data;
 }
 
-function signBody(bodyString) {
-  return crypto.createHmac('sha256', WEBHOOK_SECRET).update(bodyString).digest('hex');
-}
-
-// supertest's .send(obj) re-serializes the object itself, so to control
-// the exact bytes being signed (and verified) the raw string has to be
-// sent with .send(string) and the content-type set explicitly.
-function postSignedWebhook(payload, signatureOverride) {
-  const bodyString = JSON.stringify(payload);
-  const signature = signatureOverride !== undefined ? signatureOverride : signBody(bodyString);
-  const req = request(app).post('/api/webhooks/optimise-payments').set('Content-Type', 'application/json');
-  if (signature !== null) {
-    req.set('x-optimise-signature', signature);
-  }
-  return req.send(bodyString);
-}
-
 async function runCheckout(buyerToken, addressId) {
   const res = await request(app)
     .post('/api/checkout')
@@ -84,7 +65,6 @@ async function addToCart(buyerToken, listingId, quantity) {
 }
 
 let seller1;
-let seller2;
 let buyer;
 let buyer2;
 let addressId;
@@ -94,15 +74,10 @@ const createdListingIds = [];
 const createdUserIds = [];
 
 before(async () => {
-  if (!WEBHOOK_SECRET) {
-    throw new Error('OPTIMISE_PAYMENTS_WEBHOOK_SECRET must be set to run payment tests');
-  }
-
   seller1 = await createTestUser('seller1', 'seller');
-  seller2 = await createTestUser('seller2', 'seller');
   buyer = await createTestUser('buyer', 'buyer');
   buyer2 = await createTestUser('buyer2', 'buyer');
-  createdUserIds.push(seller1.id, seller2.id, buyer.id, buyer2.id);
+  createdUserIds.push(seller1.id, buyer.id, buyer2.id);
 
   const addressRes = await request(app).post('/api/addresses').set('Authorization', `Bearer ${buyer.token}`).send({
     line1: '1 Payments Test St',
@@ -146,36 +121,6 @@ after(async () => {
   for (const id of createdUserIds) {
     await admin.auth.admin.deleteUser(id);
   }
-});
-
-// --- Signature verification ------------------------------------------
-
-test('webhook: missing signature is rejected with 401', async () => {
-  const res = await postSignedWebhook({ event: 'payment.succeeded', data: { reference: crypto.randomUUID() } }, null);
-  assert.equal(res.status, 401);
-});
-
-test('webhook: invalid signature is rejected with 401', async () => {
-  const res = await postSignedWebhook(
-    { event: 'payment.succeeded', data: { reference: crypto.randomUUID() } },
-    'not-a-real-signature',
-  );
-  assert.equal(res.status, 401);
-});
-
-test('webhook: valid signature for an unknown checkout_group_id is acknowledged as a no-op', async () => {
-  const res = await postSignedWebhook({
-    event: 'payment.succeeded',
-    data: { reference: crypto.randomUUID(), session_id: 'sim_x', amount: 10 },
-  });
-  assert.equal(res.status, 200);
-  assert.equal(res.body.result, 'no_pending_orders');
-});
-
-test('webhook: unknown event type is acknowledged but ignored', async () => {
-  const res = await postSignedWebhook({ event: 'something.else', data: { reference: crypto.randomUUID() } });
-  assert.equal(res.status, 200);
-  assert.equal(res.body.result, 'ignored_unknown_event');
 });
 
 // --- checkout_group_id / GET /api/orders/by-group/:id -----------------
@@ -249,174 +194,90 @@ test('GET /api/orders/mine: returns every order the caller has ever placed, newe
   );
 });
 
-// --- POST /api/checkout/pay -------------------------------------------
+// --- POST /api/checkout/pay (real Stripe test-mode API calls -- sk_test_
+// only, no real charge is possible) ------------------------------------
 
 let payListing;
-let payCheckout;
+let payOrder;
 
-test('checkout/pay: creates a payment session for the sum of sibling orders', async () => {
+test('checkout/pay: creates a real Stripe Checkout Session for the order total', async () => {
   payListing = await createListing(seller1.id, { title: 'Pay Listing', price: 22, stock: 5 });
   createdListingIds.push(payListing.id);
 
   await addToCart(buyer.token, payListing.id, 2); // 44 total
-  payCheckout = await runCheckout(buyer.token, addressId);
+  const payCheckout = await runCheckout(buyer.token, addressId);
+  payOrder = payCheckout.orders[0];
 
   const res = await request(app)
     .post('/api/checkout/pay')
     .set('Authorization', `Bearer ${buyer.token}`)
-    .send({ checkout_group_id: payCheckout.checkout_group_id });
+    .send({ order_id: payOrder.id });
 
   assert.equal(res.status, 201);
-  assert.equal(Number(res.body.amount), 44);
-  assert.equal(res.body.currency, 'GBP');
-  assert.ok(res.body.session_id);
-  assert.equal(res.body.redirect_url, null, 'no real payment page exists -- must not hand back a fake redirect');
-  assert.equal(res.body.payment_connected, false, 'must tell the caller honestly that no real provider is wired up');
-  assert.ok(res.body.message, 'must explain why in a message the frontend can show the buyer');
+  assert.ok(res.body.url && res.body.url.startsWith('https://checkout.stripe.com/'), 'must return a real Stripe-hosted URL');
 
-  const { data: order } = await admin
-    .from('orders')
-    .select('payment_reference')
-    .eq('id', payCheckout.orders[0].id)
-    .single();
-  assert.equal(order.payment_reference, res.body.session_id);
+  const { data: order } = await admin.from('orders').select('payment_reference').eq('id', payOrder.id).single();
+  assert.ok(order.payment_reference && order.payment_reference.startsWith('cs_'), 'Stripe session id must be stored on the order');
 });
 
-test('checkout/pay: missing checkout_group_id is rejected with 400', async () => {
+test('checkout/pay: missing order_id is rejected with 400', async () => {
   const res = await request(app).post('/api/checkout/pay').set('Authorization', `Bearer ${buyer.token}`).send({});
   assert.equal(res.status, 400);
 });
 
-test('checkout/pay: a checkout_group_id belonging to a different buyer is rejected with 404', async () => {
+test('checkout/pay: an order belonging to a different buyer is rejected with 404', async () => {
   const res = await request(app)
     .post('/api/checkout/pay')
     .set('Authorization', `Bearer ${buyer2.token}`)
-    .send({ checkout_group_id: payCheckout.checkout_group_id });
+    .send({ order_id: payOrder.id });
   assert.equal(res.status, 404);
 });
 
-// --- Successful multi-seller payment confirmation ----------------------
-
-let successListing1;
-let successListing2;
-let successCheckout;
-
-test('webhook: payment.succeeded confirms every sibling order across multiple sellers', async () => {
-  successListing1 = await createListing(seller1.id, { title: 'Success Listing 1', price: 20, stock: 5 });
-  successListing2 = await createListing(seller2.id, { title: 'Success Listing 2', price: 30, stock: 5 });
-  createdListingIds.push(successListing1.id, successListing2.id);
-
-  await addToCart(buyer.token, successListing1.id, 1);
-  await addToCart(buyer.token, successListing2.id, 2);
-  successCheckout = await runCheckout(buyer.token, addressId);
-  assert.equal(successCheckout.orders.length, 2, 'expected one order per seller');
-
-  const totalAmount = successCheckout.orders.reduce((sum, o) => sum + Number(o.total), 0);
-
-  const res = await postSignedWebhook({
-    event: 'payment.succeeded',
-    data: { reference: successCheckout.checkout_group_id, session_id: 'sim_success', amount: totalAmount },
-  });
-
-  assert.equal(res.status, 200);
-  assert.equal(res.body.result, 'paid');
-
-  const { data: orders } = await admin
-    .from('orders')
-    .select('status')
-    .eq('checkout_group_id', successCheckout.checkout_group_id);
-  assert.ok(orders.every((o) => o.status === 'paid'));
-
-  const { data: listing1 } = await admin.from('listings').select('stock').eq('id', successListing1.id).single();
-  const { data: listing2 } = await admin.from('listings').select('stock').eq('id', successListing2.id).single();
-  assert.equal(listing1.stock, 4, 'stock decremented by the ordered quantity (1)');
-  assert.equal(listing2.stock, 3, 'stock decremented by the ordered quantity (2)');
+test('checkout/pay: an order that is not awaiting payment is rejected with 400', async () => {
+  await admin.from('orders').update({ status: 'paid' }).eq('id', payOrder.id);
+  const res = await request(app)
+    .post('/api/checkout/pay')
+    .set('Authorization', `Bearer ${buyer.token}`)
+    .send({ order_id: payOrder.id });
+  assert.equal(res.status, 400);
+  await admin.from('orders').update({ status: 'pending_payment' }).eq('id', payOrder.id);
 });
 
-test('webhook: redelivering the same payment.succeeded event is a no-op (idempotent)', async () => {
-  const res = await postSignedWebhook({
-    event: 'payment.succeeded',
-    data: { reference: successCheckout.checkout_group_id, session_id: 'sim_success', amount: 80 },
-  });
-  assert.equal(res.status, 200);
-  assert.equal(res.body.result, 'no_pending_orders', 'orders are already paid, not pending_payment');
+// --- GET /api/checkout/session-status -----------------------------------
+//
+// Only the "not paid yet" path is covered here -- confirming the "paid"
+// path for real would mean actually completing Stripe's hosted checkout
+// page (a real card entry flow), which isn't something to automate in an
+// integration test. That path is exercised manually instead.
 
-  const { data: listing1 } = await admin.from('listings').select('stock').eq('id', successListing1.id).single();
-  assert.equal(listing1.stock, 4, 'stock must not be decremented a second time');
+test('checkout/session-status: missing session_id is rejected with 400', async () => {
+  const res = await request(app).get('/api/checkout/session-status').set('Authorization', `Bearer ${buyer.token}`);
+  assert.equal(res.status, 400);
 });
 
-// --- All-or-nothing refund on a stock-change race -----------------------
-
-let raceListing1;
-let raceListing2;
-let raceCheckout;
-
-test('webhook: a stock change on one seller\'s item refunds the WHOLE group, not just that order', async () => {
-  raceListing1 = await createListing(seller1.id, { title: 'Race Listing 1', price: 15, stock: 5 });
-  raceListing2 = await createListing(seller2.id, { title: 'Race Listing 2', price: 25, stock: 2 });
-  createdListingIds.push(raceListing1.id, raceListing2.id);
-
-  await addToCart(buyer.token, raceListing1.id, 1);
-  await addToCart(buyer.token, raceListing2.id, 2); // exactly matches current stock of 2
-  raceCheckout = await runCheckout(buyer.token, addressId);
-  assert.equal(raceCheckout.orders.length, 2);
-
-  // Simulate another buyer completing a purchase for raceListing2 between
-  // checkout and this payment confirmation -- stock drops below what this
-  // order needs, but raceListing1 (seller1's item) is still fully fine.
-  await admin.from('listings').update({ stock: 1 }).eq('id', raceListing2.id);
-
-  const totalAmount = raceCheckout.orders.reduce((sum, o) => sum + Number(o.total), 0);
-  const res = await postSignedWebhook({
-    event: 'payment.succeeded',
-    data: { reference: raceCheckout.checkout_group_id, session_id: 'sim_race', amount: totalAmount },
-  });
-
-  assert.equal(res.status, 200);
-  assert.equal(res.body.result, 'refunded');
-  assert.equal(res.body.reason, 'stock_or_availability_changed');
-
-  const { data: orders } = await admin
-    .from('orders')
-    .select('status')
-    .eq('checkout_group_id', raceCheckout.checkout_group_id);
-  assert.equal(orders.length, 2);
-  assert.ok(
-    orders.every((o) => o.status === 'refunded'),
-    'seller1\'s order must also be refunded even though its own item was fine -- all-or-nothing',
-  );
-
-  const { data: listing1 } = await admin.from('listings').select('stock').eq('id', raceListing1.id).single();
-  assert.equal(listing1.stock, 5, 'unaffected listing\'s stock must not have been touched at all');
+test('checkout/session-status: unknown session_id is rejected with 404', async () => {
+  const res = await request(app)
+    .get('/api/checkout/session-status')
+    .query({ session_id: 'cs_test_does_not_exist' })
+    .set('Authorization', `Bearer ${buyer.token}`);
+  assert.equal(res.status, 404);
 });
 
-// --- Payment failure -----------------------------------------------------
+test('checkout/session-status: a session belonging to a different buyer is rejected with 404', async () => {
+  const { data: order } = await admin.from('orders').select('payment_reference').eq('id', payOrder.id).single();
+  const res = await request(app)
+    .get('/api/checkout/session-status')
+    .query({ session_id: order.payment_reference })
+    .set('Authorization', `Bearer ${buyer2.token}`);
+  assert.equal(res.status, 404);
+});
 
-let failedListing;
-let failedCheckout;
-
-test('webhook: payment.failed marks sibling orders payment_failed without touching stock', async () => {
-  failedListing = await createListing(seller1.id, { title: 'Failed Listing', price: 18, stock: 5 });
-  createdListingIds.push(failedListing.id);
-
-  await addToCart(buyer.token, failedListing.id, 1);
-  failedCheckout = await runCheckout(buyer.token, addressId);
-
-  const res = await postSignedWebhook({
-    event: 'payment.failed',
-    data: { reference: failedCheckout.checkout_group_id },
-  });
-
+test('checkout/session-status: an unpaid session reports the order as still pending_payment', async () => {
+  const { data: order } = await admin.from('orders').select('payment_reference').eq('id', payOrder.id).single();
+  const res = await request(app)
+    .get('/api/checkout/session-status')
+    .query({ session_id: order.payment_reference })
+    .set('Authorization', `Bearer ${buyer.token}`);
   assert.equal(res.status, 200);
-  assert.equal(res.body.result, 'payment_failed');
-
-  const { data: order } = await admin
-    .from('orders')
-    .select('status')
-    .eq('id', failedCheckout.orders[0].id)
-    .single();
-  assert.equal(order.status, 'payment_failed');
-
-  const { data: listing } = await admin.from('listings').select('stock').eq('id', failedListing.id).single();
-  assert.equal(listing.stock, 5, 'a failed payment must never touch stock');
+  assert.equal(res.body.status, 'pending_payment');
 });

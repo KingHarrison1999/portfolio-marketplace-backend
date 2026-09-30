@@ -26,12 +26,12 @@ async function checkout(req, res) {
 }
 
 async function pay(req, res) {
-  const { checkout_group_id: checkoutGroupId } = req.body;
-  if (!checkoutGroupId) {
-    return res.status(400).json({ error: 'checkout_group_id is required' });
+  const { order_id: orderId } = req.body;
+  if (!orderId) {
+    return res.status(400).json({ error: 'order_id is required' });
   }
 
-  const { data, error } = await checkoutService.createPaymentSession(req.user.id, checkoutGroupId);
+  const { data, error } = await checkoutService.createCheckoutSession(req.user.id, orderId);
   if (error) {
     return res.status(error.status).json({ error: error.message });
   }
@@ -39,4 +39,18 @@ async function pay(req, res) {
   res.status(201).json(data);
 }
 
-module.exports = { checkout, pay };
+async function sessionStatus(req, res) {
+  const { session_id: sessionId } = req.query;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'session_id is required' });
+  }
+
+  const { data, error } = await checkoutService.getCheckoutSessionStatus(req.user.id, sessionId);
+  if (error) {
+    return res.status(error.status).json({ error: error.message });
+  }
+
+  res.json(data);
+}
+
+module.exports = { checkout, pay, sessionStatus };

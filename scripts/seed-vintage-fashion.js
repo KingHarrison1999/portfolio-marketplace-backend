@@ -1,6 +1,6 @@
 // One-off reseed: replaces the old collectibles demo catalog with a
 // vintage/secondhand-fashion placeholder catalog, as part of rebranding this
-// portfolio demo away from "The Collectors Market" niche.
+// portfolio demo away from its original niche.
 //
 // Not part of the app's runtime -- run manually, once, against the
 // PORTFOLIO project's Supabase database (see the guard below). Uses the

@@ -10,7 +10,6 @@ const cartRoute = require('./routes/cart');
 const checkoutRoute = require('./routes/checkout');
 const addressesRoute = require('./routes/addresses');
 const ordersRoute = require('./routes/orders');
-const webhooksRoute = require('./routes/webhooks');
 const categoriesRoute = require('./routes/categories');
 const adSpacesRoute = require('./routes/adSpaces');
 const adminRoute = require('./routes/admin');
@@ -21,17 +20,7 @@ const contactRoute = require('./routes/contact');
 const app = express();
 
 app.use(cors(corsOptions));
-// Stashes the raw request body bytes on req.rawBody, alongside the usual
-// parsed req.body -- webhook signature verification (see
-// middleware/verifyWebhookSignature.js) has to hash the exact bytes
-// received, not a re-serialized copy of the parsed JSON.
-app.use(
-  express.json({
-    verify: (req, res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
+app.use(express.json());
 
 app.use('/api', healthRoute);
 app.use('/api/profile', profileRoute);
@@ -41,7 +30,6 @@ app.use('/api/cart', cartRoute);
 app.use('/api/checkout', checkoutRoute);
 app.use('/api/addresses', addressesRoute);
 app.use('/api/orders', ordersRoute);
-app.use('/api/webhooks', webhooksRoute);
 app.use('/api/categories', categoriesRoute);
 app.use('/api/ad-spaces', adSpacesRoute);
 app.use('/api/admin', adminRoute);

@@ -17,7 +17,7 @@ npm run dev
 - `routes/` — route definitions
 - `controllers/` — request handlers
 - `services/` — business logic
-- `lib/` — thin wrappers around external integrations (`db.js` for Supabase, `paymentProvider.js` for Optimise Payments)
+- `lib/` — thin wrappers around external integrations (`db.js` for Supabase, `stripeClient.js` for Stripe)
 
 ## Health check
 

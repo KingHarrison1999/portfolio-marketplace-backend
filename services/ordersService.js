@@ -1,5 +1,19 @@
 const supabase = require('../lib/db');
 
+async function getOrderById(orderId) {
+  const { data, error } = await supabase.from('orders').select('*, order_items(*)').eq('id', orderId).maybeSingle();
+  return { data, error };
+}
+
+async function getOrderByPaymentReference(paymentReference) {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, order_items(*)')
+    .eq('payment_reference', paymentReference)
+    .maybeSingle();
+  return { data, error };
+}
+
 async function getOrdersByCheckoutGroup(checkoutGroupId) {
   const { data, error } = await supabase
     .from('orders')
@@ -21,4 +35,4 @@ async function getOrdersByBuyer(buyerId) {
   return { data, error };
 }
 
-module.exports = { getOrdersByCheckoutGroup, getOrdersByBuyer };
+module.exports = { getOrderById, getOrderByPaymentReference, getOrdersByCheckoutGroup, getOrdersByBuyer };

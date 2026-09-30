@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const supabase = require('../lib/db');
 const cartService = require('./cartService');
 const ordersService = require('./ordersService');
-const paymentProvider = require('../lib/paymentProvider');
+const stripe = require('../lib/stripeClient');
 const emailNotificationService = require('./emailNotificationService');
 
 const TIER_RATE_FIELD = { individual: 'flat_rate', business: 'business_rate', charity: 'charity_rate' };
@@ -229,58 +229,110 @@ async function checkout(buyerId, shippingAddress) {
   return { data: { checkout_group_id: checkoutGroupId, orders: createdOrders }, error: null };
 }
 
-// Creates a hosted checkout session covering every still-payable
-// (pending_payment) sibling order in the group -- one payment for however
-// many per-seller orders resulted from the checkout. See
-// lib/paymentProvider.js for why this is a simulation rather than a real
-// call to Optimise Payments.
-async function createPaymentSession(buyerId, checkoutGroupId) {
-  const { data: orders, error } = await ordersService.getOrdersByCheckoutGroup(checkoutGroupId);
+// Creates a real Stripe Checkout Session for a single order (one order =
+// one seller's slice of a checkout, per the comment on checkout() above).
+// Uses price_data inline rather than pre-created Stripe Products/Prices --
+// there's nothing to keep in sync since the order total is already fixed
+// at checkout time.
+async function createCheckoutSession(buyerId, orderId) {
+  const { data: order, error } = await ordersService.getOrderById(orderId);
   if (error) {
-    return { error: { status: 500, message: 'Failed to load orders' } };
+    return { error: { status: 500, message: 'Failed to load order' } };
+  }
+  if (!order || order.buyer_id !== buyerId) {
+    // Don't distinguish "doesn't exist" from "exists but isn't yours".
+    return { error: { status: 404, message: 'Order not found' } };
+  }
+  if (order.status !== 'pending_payment') {
+    return { error: { status: 400, message: 'Order is not awaiting payment' } };
   }
 
-  const ownOrders = orders.filter((o) => o.buyer_id === buyerId);
-  if (ownOrders.length === 0) {
-    return { error: { status: 404, message: 'Checkout group not found' } };
-  }
+  const itemCount = order.order_items.length;
+  const name =
+    itemCount === 1 ? order.order_items[0].title_at_purchase : `Order (${itemCount} items)`;
 
-  const payableOrders = ownOrders.filter((o) => o.status === 'pending_payment');
-  if (payableOrders.length === 0) {
-    return { error: { status: 400, message: 'No orders in this checkout group are awaiting payment' } };
-  }
-
-  const totalAmount = round2(payableOrders.reduce((sum, o) => sum + Number(o.total), 0));
-
-  const session = await paymentProvider.createPayment({
-    amount: totalAmount,
-    currency: 'GBP',
-    reference: checkoutGroupId,
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    line_items: [
+      {
+        price_data: {
+          currency: 'gbp',
+          product_data: { name },
+          unit_amount: Math.round(order.total * 100),
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: `${process.env.FRONTEND_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.FRONTEND_URL}/checkout/cancel`,
   });
 
-  await supabase
+  const { error: updateError } = await supabase
     .from('orders')
-    .update({ payment_reference: session.session_id })
-    .in(
-      'id',
-      payableOrders.map((o) => o.id),
-    );
+    .update({ payment_reference: session.id })
+    .eq('id', order.id);
+  if (updateError) {
+    return { error: { status: 500, message: 'Failed to save payment session' } };
+  }
 
-  return {
-    data: {
-      checkout_group_id: checkoutGroupId,
-      amount: session.amount,
-      currency: session.currency,
-      session_id: session.session_id,
-      redirect_url: session.redirect_url,
-      payment_connected: false,
-      message:
-        'Payments are not connected yet in this demo -- there is no real payment provider behind this. ' +
-        'This session is simulated so the rest of the order flow (confirmation, stock updates, order history) ' +
-        'can still be tested end-to-end.',
-    },
-    error: null,
-  };
+  return { data: { url: session.url }, error: null };
 }
 
-module.exports = { checkout, getAddressForBuyer, createPaymentSession };
+// Polled by the frontend after Stripe redirects back to success_url with
+// the real session id filled in -- there's no webhook, so this is the only
+// place payment gets confirmed. Idempotent: re-checking an already-paid
+// order just reports its status again rather than re-running the paid
+// side effects.
+async function getCheckoutSessionStatus(buyerId, sessionId) {
+  const { data: order, error } = await ordersService.getOrderByPaymentReference(sessionId);
+  if (error) {
+    return { error: { status: 500, message: 'Failed to load order' } };
+  }
+  if (!order || order.buyer_id !== buyerId) {
+    return { error: { status: 404, message: 'Order not found for this session' } };
+  }
+
+  if (order.status !== 'pending_payment') {
+    return { data: { status: order.status }, error: null };
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  if (session.payment_status !== 'paid') {
+    return { data: { status: order.status }, error: null };
+  }
+
+  // Best-effort stock decrement -- this demo has no refund flow (no
+  // webhooks, no Stripe Connect), so unlike the old simulated-payment
+  // path, an already-successful Stripe payment is never rolled back over
+  // a stock conflict; gte('stock', quantity) just stops a listing's stock
+  // from going negative if it's already gone.
+  for (const item of order.order_items) {
+    const { data: listing } = await supabase
+      .from('listings')
+      .select('stock')
+      .eq('id', item.listing_id)
+      .maybeSingle();
+    if (!listing) continue;
+
+    await supabase
+      .from('listings')
+      .update({ stock: listing.stock - item.quantity })
+      .eq('id', item.listing_id)
+      .gte('stock', item.quantity);
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from('orders')
+    .update({ status: 'paid' })
+    .eq('id', order.id)
+    .eq('status', 'pending_payment')
+    .select()
+    .single();
+  if (updateError) {
+    return { error: { status: 500, message: 'Failed to mark order paid' } };
+  }
+
+  return { data: { status: updated.status }, error: null };
+}
+
+module.exports = { checkout, getAddressForBuyer, createCheckoutSession, getCheckoutSessionStatus };
