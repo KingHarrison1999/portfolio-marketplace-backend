@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "seed:vintage-fashion": "node scripts/seed-vintage-fashion.js",
+    "seed:category-taxonomy": "node scripts/seed-category-taxonomy.js",
     "test": "node --test --test-concurrency=1 test/listings.test.js test/buyer.test.js test/payments.test.js test/admin.test.js test/account.test.js test/misc.test.js"
   },
   "keywords": [],
