@@ -7,7 +7,7 @@
 // and their item-type children (25 rows each, 50 total).
 //
 // Refuses to run if any listing still references one of these categories --
-// they should all be empty branches (Men/Women/Junior hold the real
+// they should all be empty branches (Men/Women hold the real
 // catalog), but this checks rather than assuming.
 //
 // Not part of the app's runtime -- run manually, once, against the

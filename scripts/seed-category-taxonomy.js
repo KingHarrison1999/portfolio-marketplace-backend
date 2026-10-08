@@ -67,7 +67,9 @@ const OLD_CATEGORY_NAMES = [
 ];
 
 // --- New 3-level taxonomy ------------------------------------------------
-const MAIN_CATEGORIES = ['Men', 'Women', 'Junior', 'New Arrivals', 'Secondhand'];
+// No 'Junior' branch: it was removed (with its placeholder listings) by
+// scripts/clean-demo-catalog.js, so a reseed doesn't bring back an empty tree.
+const MAIN_CATEGORIES = ['Men', 'Women', 'New Arrivals', 'Secondhand'];
 const SUBCATEGORIES = ['Clothing', 'Shoes', 'Bags', 'Accessories'];
 const ITEM_TYPES = {
   Clothing: ['T-Shirts', 'Jackets and Coats', 'Hoodies', 'Shirts', 'Jeans', 'Sport Wear', 'Underwear'],
@@ -88,8 +90,10 @@ function slugify(name) {
 // belongs in. The requested item-type list has no "Dresses"/"Skirts"/
 // generic "Trousers" bucket, so dresses, blouses, tops and the mini skirt
 // are placed under Clothing > Shirts (the closest existing bucket), and
-// the corduroy trousers under Clothing > Jeans -- noted here rather than
-// silently forced.
+// the corduroy trousers (women's -- see the photo) under Clothing > Jeans --
+// noted here rather than silently forced.
+// scripts/add-womens-clothing-item-types.js later adds Women's Dresses /
+// Skirts / Trousers and moves these into them.
 const LISTING_ASSIGNMENTS = [
   { title: 'Floral Midi Tea Dress', main: 'Women', sub: 'Clothing', item: 'Shirts' },
   { title: 'Emerald Velvet Evening Dress', main: 'Women', sub: 'Clothing', item: 'Shirts' },
@@ -102,11 +106,11 @@ const LISTING_ASSIGNMENTS = [
   { title: 'Striped Cotton Boat-Neck Top', main: 'Women', sub: 'Clothing', item: 'Shirts' },
   { title: 'Lace Trim Camisole', main: 'Women', sub: 'Clothing', item: 'Underwear' },
   { title: 'Pleated Tartan Mini Skirt', main: 'Women', sub: 'Clothing', item: 'Shirts' },
-  { title: 'Wide-Leg Corduroy Trousers', main: 'Men', sub: 'Clothing', item: 'Jeans' },
+  { title: 'Wide-Leg Corduroy Trousers', main: 'Women', sub: 'Clothing', item: 'Jeans' },
   { title: 'Leather Chelsea Boots', main: 'Women', sub: 'Shoes', item: 'Boots' },
   { title: 'Block Heel Mary Janes', main: 'Women', sub: 'Shoes', item: 'Dress Shoes' },
   { title: 'Structured Leather Satchel', main: 'Women', sub: 'Bags', item: 'Shoulder Bags' },
-  { title: 'Silk Scarf, Paisley Print', main: 'Women', sub: 'Accessories', item: 'Gloves and Scarfs' },
+  { title: 'Silk Scarf, Abstract Print', main: 'Women', sub: 'Accessories', item: 'Gloves and Scarfs' },
   { title: "Men's Wind-Up Wristwatch", main: 'Men', sub: 'Accessories', item: 'Jewelry' },
   { title: 'Costume Pearl Drop Earrings', main: 'Women', sub: 'Accessories', item: 'Jewelry' },
 ];

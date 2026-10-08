@@ -1,9 +1,11 @@
 // One-off follow-up to scripts/seed-category-taxonomy.js: after the 3-level
-// taxonomy went in, Men's Shoes, Men's Bags, and all four Junior
-// subcategories had zero listings. Adds 6 placeholder listings (one per
-// gap) using the same 5 fake sellers from scripts/seed-vintage-fashion.js,
-// so every real (non-computed-filter) branch of the taxonomy has at least
-// one item.
+// taxonomy went in, Men's Shoes and Men's Bags had zero listings. Adds a
+// placeholder listing for each, using the fake sellers from
+// scripts/seed-vintage-fashion.js. Both are created as 'draft': their
+// picsum placeholder photos are random landscapes, not the items, so they
+// stay hidden until real photos exist. (This script used to add four
+// Junior listings too; the Junior branch and those listings were removed
+// by scripts/clean-demo-catalog.js.)
 //
 // Not part of the app's runtime -- run manually, once, against the
 // PORTFOLIO project's Supabase database (see the guard below). Uses the
@@ -64,6 +66,7 @@ const LISTINGS = [
     price: 32,
     condition: 'used',
     imageSeed: 'vf-mens-shoes-1',
+    status: 'draft',
   },
   {
     categorySlug: 'men-bags-backpacks',
@@ -73,42 +76,7 @@ const LISTINGS = [
     price: 30,
     condition: 'like_new',
     imageSeed: 'vf-mens-bag-1',
-  },
-  {
-    categorySlug: 'junior-clothing-t-shirts',
-    seller: 'isla',
-    title: "Kids' Dinosaur Print T-Shirt",
-    description: 'Cotton t-shirt with a faded dinosaur print, age 5-6. Soft from washing, no holes or stains.',
-    price: 6,
-    condition: 'used',
-    imageSeed: 'vf-junior-clothing-1',
-  },
-  {
-    categorySlug: 'junior-shoes-sneakers',
-    seller: 'freya',
-    title: "Kids' Velcro Trainers",
-    description: 'Velcro-strap trainers, UK junior size 10. Worn a handful of times, tread barely marked.',
-    price: 14,
-    condition: 'like_new',
-    imageSeed: 'vf-junior-shoes-1',
-  },
-  {
-    categorySlug: 'junior-bags-backpacks',
-    seller: 'sam',
-    title: "Kids' Dinosaur Backpack",
-    description: 'Small dinosaur-print backpack for nursery or school, adjustable straps. Unused, tags removed.',
-    price: 10,
-    condition: 'new',
-    imageSeed: 'vf-junior-bag-1',
-  },
-  {
-    categorySlug: 'junior-accessories-hats',
-    seller: 'priya',
-    title: "Kids' Knitted Bobble Hat",
-    description: 'Knitted bobble hat in grey, one size fits most children. New, never worn.',
-    price: 5,
-    condition: 'new',
-    imageSeed: 'vf-junior-accessory-1',
+    status: 'draft',
   },
 ];
 
@@ -177,18 +145,21 @@ async function main() {
     });
     if (listingError) throw listingError;
 
-    const { error: activateError } = await supabase
-      .from('listings')
-      .update({ status: 'active' })
-      .eq('id', listing.id);
-    if (activateError) throw activateError;
+    // status: 'draft' = placeholder photo only, keep it hidden until a real one exists.
+    if (item.status !== 'draft') {
+      const { error: activateError } = await supabase
+        .from('listings')
+        .update({ status: 'active' })
+        .eq('id', listing.id);
+      if (activateError) throw activateError;
+    }
 
     const { error: imageError } = await supabase
       .from('listing_images')
       .insert({ listing_id: listing.id, image_url: placeholderImageUrl(item.imageSeed), sort_order: 0 });
     if (imageError) throw imageError;
 
-    console.log(`  + "${item.title}" (£${item.price}, ${item.condition}) by ${seller.display_name} in ${category.name}`);
+    console.log(`  + "${item.title}" (£${item.price}, ${item.condition}${item.status === 'draft' ? ', draft' : ''}) by ${seller.display_name} in ${category.name}`);
     created += 1;
   }
 

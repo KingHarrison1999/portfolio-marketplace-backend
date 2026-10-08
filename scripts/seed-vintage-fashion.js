@@ -103,6 +103,11 @@ const CONDITIONS = ['new', 'like_new', 'used', 'for_parts'];
 // feeds picsum.photos' deterministic seeded endpoint, so re-running the
 // script points at the same placeholder image per listing rather than a new
 // random one each time.
+//
+// Descriptions match the real photos scripts/attach-real-listing-photos.js
+// later attaches. status: 'draft' marks the two whose photo is still a
+// picsum placeholder (a random landscape, not the item) -- created hidden
+// until a real photo exists.
 const LISTINGS = [
   { category: 'dresses', seller: 'isla', title: 'Floral Midi Tea Dress', description: 'Cotton-blend tea dress in a faded floral print. Side zip, knee-length, fully lined. A little wear on the hem, nothing that shows when worn.', price: 28, condition: 'new', imageSeed: 'vf-dress-1' },
   { category: 'dresses', seller: 'isla', title: 'Emerald Velvet Evening Dress', description: 'Deep green velvet, fitted bodice, floor-length. One previous owner, worn once to a wedding. Small hook-and-eye repair at the back, invisible when worn.', price: 65, condition: 'like_new', imageSeed: 'vf-dress-2' },
@@ -111,8 +116,8 @@ const LISTINGS = [
   { category: 'outerwear-jackets', seller: 'marcus', title: 'Tan Leather Biker Jacket', description: 'Genuine leather biker jacket, tan colourway, asymmetric zip. Soft, broken-in leather with natural creasing -- no rips or repairs.', price: 85, condition: 'for_parts', imageSeed: 'vf-jacket-1' },
   { category: 'outerwear-jackets', seller: 'marcus', title: 'Wool Herringbone Overcoat', description: 'Full-length herringbone wool overcoat, single-breasted. Warm and heavy, ideal for winter. One button reattached, matches the originals.', price: 52, condition: 'new', imageSeed: 'vf-jacket-2' },
 
-  { category: 'denim', seller: 'priya', title: 'High-Waisted Straight Leg Jeans', description: 'Classic five-pocket straight leg jeans, high rise, mid-wash denim. No fading beyond normal wear.', price: 22, condition: 'like_new', imageSeed: 'vf-denim-1' },
-  { category: 'denim', seller: 'priya', title: 'Oversized Denim Jacket', description: 'Boxy oversized denim jacket, light stonewash. Two chest pockets, button front. Some fraying at the cuffs, part of the look.', price: 24, condition: 'used', imageSeed: 'vf-denim-2' },
+  { category: 'denim', seller: 'priya', title: 'High-Waisted Straight Leg Jeans', description: 'Classic five-pocket straight leg jeans, high rise, mid-wash denim. No fading beyond normal wear.', price: 22, condition: 'like_new', imageSeed: 'vf-denim-1', status: 'draft' },
+  { category: 'denim', seller: 'priya', title: 'Oversized Denim Jacket', description: 'Boxy oversized denim jacket, light stonewash. Two chest pockets, button front. Some fraying at the cuffs, part of the look.', price: 24, condition: 'used', imageSeed: 'vf-denim-2', status: 'draft' },
 
   { category: 'tops-blouses', seller: 'priya', title: 'Silk Pussy-Bow Blouse', description: 'Cream silk blouse with a tie neck. Beautiful drape, gently used. Dry clean only.', price: 18, condition: 'for_parts', imageSeed: 'vf-top-1' },
   { category: 'tops-blouses', seller: 'freya', title: 'Striped Cotton Boat-Neck Top', description: 'Breton-style striped top, boat neck, three-quarter sleeves. A wardrobe staple, worn a handful of times.', price: 12, condition: 'new', imageSeed: 'vf-top-2' },
@@ -121,14 +126,14 @@ const LISTINGS = [
   { category: 'skirts-trousers', seller: 'freya', title: 'Pleated Tartan Mini Skirt', description: 'Classic pleated tartan mini, side zip, fully lined. Pleats hold their shape well.', price: 16, condition: 'used', imageSeed: 'vf-skirt-1' },
   { category: 'skirts-trousers', seller: 'marcus', title: 'Wide-Leg Corduroy Trousers', description: 'High-waisted wide-leg corduroy trousers in rust. Deep pockets, belt loops. Corduroy is soft with no bald patches.', price: 26, condition: 'for_parts', imageSeed: 'vf-trouser-1' },
 
-  { category: 'shoes', seller: 'freya', title: 'Leather Chelsea Boots', description: 'Black leather Chelsea boots with elastic side panels. Resoled once, plenty of life left in them.', price: 38, condition: 'new', imageSeed: 'vf-shoes-1' },
-  { category: 'shoes', seller: 'freya', title: 'Block Heel Mary Janes', description: 'Burgundy patent block-heel Mary Janes with a buckle strap. Worn indoors only, a couple of times.', price: 29, condition: 'like_new', imageSeed: 'vf-shoes-2' },
+  { category: 'shoes', seller: 'freya', title: 'Leather Chelsea Boots', description: 'Brown leather Chelsea boots with elastic side panels. Resoled once, plenty of life left in them.', price: 38, condition: 'new', imageSeed: 'vf-shoes-1' },
+  { category: 'shoes', seller: 'freya', title: 'Block Heel Mary Janes', description: 'Black Mary Janes with a low heel and a buckle strap. Worn indoors only, a couple of times.', price: 29, condition: 'like_new', imageSeed: 'vf-shoes-2' },
 
   { category: 'bags-accessories', seller: 'sam', title: 'Structured Leather Satchel', description: 'Tan leather satchel with brass buckles and an adjustable strap. Interior lining intact, exterior has a nice worn-in patina.', price: 45, condition: 'used', imageSeed: 'vf-bag-1' },
-  { category: 'bags-accessories', seller: 'sam', title: 'Silk Scarf, Paisley Print', description: 'Square silk scarf in a classic paisley print. Hand-rolled edges. Small colour fade on one corner from folding.', price: 11, condition: 'for_parts', imageSeed: 'vf-bag-2' },
+  { category: 'bags-accessories', seller: 'sam', title: 'Silk Scarf, Abstract Print', description: 'Square silk scarf in a bright abstract print. Hand-rolled edges. Small colour fade on one corner from folding.', price: 11, condition: 'for_parts', imageSeed: 'vf-bag-2' },
 
-  { category: 'jewellery-watches', seller: 'sam', title: "Men's Wind-Up Wristwatch", description: 'Mechanical wind-up wristwatch, stainless case, leather strap replaced with a new one. Keeps good time.', price: 34, condition: 'new', imageSeed: 'vf-watch-1' },
-  { category: 'jewellery-watches', seller: 'sam', title: 'Costume Pearl Drop Earrings', description: 'Faux pearl drop earrings, gold-tone fittings. Clip-on, no piercing needed. Excellent condition, barely worn.', price: 8, condition: 'like_new', imageSeed: 'vf-jewellery-1' },
+  { category: 'jewellery-watches', seller: 'sam', title: "Men's Wind-Up Wristwatch", description: 'Mechanical wind-up wristwatch with a rose-gold case, leather strap replaced with a new one. Keeps good time.', price: 34, condition: 'new', imageSeed: 'vf-watch-1' },
+  { category: 'jewellery-watches', seller: 'sam', title: 'Costume Pearl Drop Earrings', description: 'Faux pearl drop earrings with silver-tone fittings. Clip-on, no piercing needed. Excellent condition, barely worn.', price: 8, condition: 'like_new', imageSeed: 'vf-jewellery-1' },
 ];
 
 function placeholderImageUrl(seed) {
@@ -297,19 +302,22 @@ async function main() {
     if (listingError) throw listingError;
 
     // Publish it -- createListing() defaults to 'draft' (matches the real
-    // seller flow), but a seed catalog should actually be visible.
-    const { error: activateError } = await supabase
-      .from('listings')
-      .update({ status: 'active' })
-      .eq('id', listing.id);
-    if (activateError) throw activateError;
+    // seller flow), but a seed catalog should actually be visible. Items
+    // flagged status: 'draft' (no real photo yet) stay hidden.
+    if (item.status !== 'draft') {
+      const { error: activateError } = await supabase
+        .from('listings')
+        .update({ status: 'active' })
+        .eq('id', listing.id);
+      if (activateError) throw activateError;
+    }
 
     const { error: imageError } = await supabase
       .from('listing_images')
       .insert({ listing_id: listing.id, image_url: placeholderImageUrl(item.imageSeed), sort_order: 0 });
     if (imageError) throw imageError;
 
-    console.log(`  + "${item.title}" (£${item.price}, ${item.condition}) by ${seller.display_name} in ${category.name}`);
+    console.log(`  + "${item.title}" (£${item.price}, ${item.condition}${item.status === 'draft' ? ', draft' : ''}) by ${seller.display_name} in ${category.name}`);
     created += 1;
   }
 

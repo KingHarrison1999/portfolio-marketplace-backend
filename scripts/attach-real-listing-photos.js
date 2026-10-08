@@ -68,7 +68,7 @@ const TITLE_TO_IMAGE_FILE = {
   'Pleated Tartan Mini Skirt': 'Pleated Tartan Mini Skirt.jpg',
   'Polka Dot Shirt Dress': 'Polka Dot Shirt Dress.jpg',
   'Silk Pussy-Bow Blouse': 'Silk Pussy-Bow Blouse.jpg',
-  'Silk Scarf, Paisley Print': 'Silk Scarf Paisley Print.jpg',
+  'Silk Scarf, Abstract Print': 'Silk Scarf Paisley Print.jpg', // filename predates the retitle
   'Striped Cotton Boat-Neck Top': 'Striped Cotton Boat-Neck Top.jpg',
   'Structured Leather Satchel': 'Structured Leather Satchel Bag.jpg',
   'Tan Leather Biker Jacket': 'Tan Leather Biker Jacket.jpg',
@@ -94,7 +94,7 @@ const ALL_18_SEEDED_TITLES = [
   'Leather Chelsea Boots',
   'Block Heel Mary Janes',
   'Structured Leather Satchel',
-  'Silk Scarf, Paisley Print',
+  'Silk Scarf, Abstract Print',
   "Men's Wind-Up Wristwatch",
   'Costume Pearl Drop Earrings',
 ];

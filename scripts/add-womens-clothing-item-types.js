@@ -5,7 +5,7 @@
 // (Dresses, Skirts, Trousers, Jumpers & Knitwear) and moves the listings
 // that were force-fit into their correct new category.
 //
-// Scoped to Women's Clothing specifically, not added to Men/Junior/New
+// Scoped to Women's Clothing specifically, not added to Men/New
 // Arrivals/Secondhand -- those weren't asked for and still don't have a
 // Dresses/Skirts/Trousers gap flagged against them.
 //
@@ -62,6 +62,7 @@ const LISTING_REASSIGNMENTS = [
   { title: 'Emerald Velvet Evening Dress', item: 'Dresses' },
   { title: 'Polka Dot Shirt Dress', item: 'Dresses' },
   { title: 'Pleated Tartan Mini Skirt', item: 'Skirts' },
+  { title: 'Wide-Leg Corduroy Trousers', item: 'Trousers' },
 ];
 
 function slugify(name) {
