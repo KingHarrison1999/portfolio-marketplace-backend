@@ -194,6 +194,87 @@ async function searchListings({ categoryIds, seasons, minPrice, maxPrice, q, sor
   return { data, error, count };
 }
 
+// Order statuses that count as a sale for "Popular This Week" (money taken;
+// not pending, failed, cancelled or refunded).
+const SOLD_ORDER_STATUSES = ['paid', 'processing', 'shipped', 'completed'];
+const POPULAR_WINDOW_DAYS = 7;
+
+// ISO-8601 week as { year, week } (weeks start Monday; week 1 holds the
+// year's first Thursday).
+function isoWeek(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day); // the Thursday of this week
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+  return { year: d.getUTCFullYear(), week: Math.ceil(((d - yearStart) / 86400000 + 1) / 7) };
+}
+
+// Small seeded PRNG (mulberry32): the same seed gives the same sequence.
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// "Popular This Week": active listings ranked by units sold in the last 7
+// days. If fewer than `count` have sales, the rest are other active
+// listings in an order seeded by the ISO week, so the fill stays put for a
+// week and changes the next. Each row carries units_sold_7d.
+async function getPopularThisWeek(count = 8, now = new Date()) {
+  const since = new Date(now.getTime() - POPULAR_WINDOW_DAYS * 86400000).toISOString();
+
+  const [salesRes, listingsRes] = await Promise.all([
+    supabase
+      .from('order_items')
+      .select('listing_id, quantity, orders!inner(status, created_at)')
+      .not('listing_id', 'is', null)
+      .in('orders.status', SOLD_ORDER_STATUSES)
+      .gte('orders.created_at', since),
+    supabase
+      .from('listings')
+      .select('*, listing_images(image_url, sort_order)')
+      .eq('status', 'active')
+      .order('sort_order', { foreignTable: 'listing_images', ascending: true })
+      .limit(1, { foreignTable: 'listing_images' }),
+  ]);
+
+  const error = salesRes.error || listingsRes.error;
+  if (error) return { data: null, error };
+
+  const unitsById = new Map();
+  for (const row of salesRes.data) {
+    unitsById.set(row.listing_id, (unitsById.get(row.listing_id) || 0) + row.quantity);
+  }
+
+  const listings = listingsRes.data.map((listing) => {
+    listing.primary_image_url = listing.listing_images?.[0]?.image_url ?? null;
+    delete listing.listing_images;
+    listing.units_sold_7d = unitsById.get(listing.id) || 0;
+    return listing;
+  });
+
+  const ranked = listings
+    .filter((listing) => listing.units_sold_7d > 0)
+    .sort((a, b) => b.units_sold_7d - a.units_sold_7d || b.created_at.localeCompare(a.created_at))
+    .slice(0, count);
+
+  // Sorted by id first so the shuffle's input doesn't depend on DB row order.
+  const rest = listings.filter((listing) => listing.units_sold_7d === 0).sort((a, b) => a.id.localeCompare(b.id));
+  const { year, week } = isoWeek(now);
+  const random = seededRandom(year * 100 + week);
+  for (let i = rest.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+
+  return { data: ranked.concat(rest.slice(0, count - ranked.length)), error: null };
+}
+
 async function getSellerDashboard(sellerId) {
   const [activeCountRes, soldCountRes, stockRes, recentOrderItemsRes] = await Promise.all([
     supabase
@@ -263,6 +344,8 @@ module.exports = {
   softDeleteListing,
   getSellerDashboard,
   searchListings,
+  getPopularThisWeek,
   getAllListingsForAdmin,
+  isoWeek,
   SEASONS,
 };

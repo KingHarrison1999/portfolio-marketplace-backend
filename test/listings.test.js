@@ -396,3 +396,39 @@ test('GET /api/listings rejects an unknown season with 400', async () => {
   assert.equal(res.status, 400);
 });
 
+// --- Popular This Week ---
+
+test('GET /api/listings/popular-this-week returns up to 8 distinct active listings', async () => {
+  const res = await request(app).get('/api/listings/popular-this-week');
+  assert.equal(res.status, 200);
+  const { listings } = res.body;
+  assert.ok(listings.length > 0 && listings.length <= 8);
+  assert.equal(new Set(listings.map((l) => l.id)).size, listings.length, 'no duplicates');
+  for (const l of listings) {
+    assert.equal(l.status, 'active');
+    assert.ok(Array.isArray(l.seasons));
+    assert.equal(typeof l.units_sold_7d, 'number');
+    assert.ok('primary_image_url' in l);
+  }
+  // Ranked listings (with sales) come before the weekly fill.
+  const firstUnsold = listings.findIndex((l) => l.units_sold_7d === 0);
+  if (firstUnsold !== -1) assert.ok(listings.slice(firstUnsold).every((l) => l.units_sold_7d === 0));
+
+  const again = await request(app).get('/api/listings/popular-this-week');
+  assert.deepEqual(
+    again.body.listings.map((l) => l.id),
+    listings.map((l) => l.id),
+    'same selection within the same week',
+  );
+});
+
+test('getPopularThisWeek: the fill is seeded by ISO week', async () => {
+  const listingsService = require('../services/listingsService');
+  assert.deepEqual(listingsService.isoWeek(new Date('2026-10-09T12:00:00Z')), { year: 2026, week: 41 });
+  assert.deepEqual(listingsService.isoWeek(new Date('2027-01-01T12:00:00Z')), { year: 2026, week: 53 });
+  assert.deepEqual(listingsService.isoWeek(new Date('2024-12-30T12:00:00Z')), { year: 2025, week: 1 });
+
+  const ids = async (iso) => (await listingsService.getPopularThisWeek(8, new Date(iso))).data.map((l) => l.id);
+  // Monday and Sunday of the same ISO week pick the same listings.
+  assert.deepEqual(await ids('2026-10-05T01:00:00Z'), await ids('2026-10-11T22:00:00Z'));
+});

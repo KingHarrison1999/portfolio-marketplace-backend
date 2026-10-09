@@ -22,9 +22,10 @@ const upload = multer({
   },
 });
 
-// Public routes. "/mine" and "/mine/dashboard" must be registered before
-// the "/:id" wildcard or it would swallow them.
+// Public routes. "/popular-this-week", "/mine" and "/mine/dashboard" must be
+// registered before the "/:id" wildcard or it would swallow them.
 router.get('/', controller.browse);
+router.get('/popular-this-week', controller.popularThisWeek);
 router.get('/mine', ...sellerOnly, controller.getMine);
 router.get('/mine/dashboard', ...sellerOnly, controller.getDashboard);
 router.get('/:id', optionalAuth, controller.getPublic);

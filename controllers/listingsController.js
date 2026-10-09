@@ -89,6 +89,16 @@ async function browse(req, res) {
   res.json({ listings: data, total: count, page, limit });
 }
 
+// GET /api/listings/popular-this-week -- the homepage shelf (see
+// listingsService.getPopularThisWeek).
+async function popularThisWeek(req, res) {
+  const { data, error } = await listingsService.getPopularThisWeek(8);
+  if (error) {
+    return res.status(500).json({ error: 'Failed to load popular listings' });
+  }
+  res.json({ listings: data });
+}
+
 async function getPublic(req, res) {
   const { data: listing, error } = await listingsService.getListingById(req.params.id);
   if (error) {
@@ -222,6 +232,7 @@ async function listAllForAdmin(req, res) {
 
 module.exports = {
   browse,
+  popularThisWeek,
   getPublic,
   create,
   getMine,
