@@ -29,7 +29,35 @@ function parseCategoryIds(value) {
   return ids.length > 0 ? ids : undefined;
 }
 
+// season can be repeated too (?season=spring&season=summer), matching
+// listings tagged with any of them. Returns { seasons } or { error }.
+function parseSeasonQuery(value) {
+  if (value === undefined) return { seasons: undefined };
+  const values = (Array.isArray(value) ? value : [value]).filter((v) => typeof v === 'string' && v.length > 0);
+  const invalid = values.find((v) => !listingsService.SEASONS.includes(v));
+  if (invalid !== undefined) {
+    return { error: `season must be one of: ${listingsService.SEASONS.join(', ')}` };
+  }
+  return { seasons: values.length > 0 ? values : undefined };
+}
+
+// The seasons field on create/edit: an array of zero or more of the four
+// seasons. Returns { seasons } -- deduplicated, in spring-to-winter order --
+// or { error }. Undefined (field left out) stays undefined.
+function parseSeasonsField(value) {
+  if (value === undefined) return { seasons: undefined };
+  if (!Array.isArray(value) || !value.every((v) => listingsService.SEASONS.includes(v))) {
+    return { error: `seasons must be an array of zero or more of: ${listingsService.SEASONS.join(', ')}` };
+  }
+  return { seasons: listingsService.SEASONS.filter((s) => value.includes(s)) };
+}
+
 async function browse(req, res) {
+  const season = parseSeasonQuery(req.query.season);
+  if (season.error) {
+    return res.status(400).json({ error: season.error });
+  }
+
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
   const minPrice = req.query.min_price !== undefined ? Number(req.query.min_price) : undefined;
@@ -39,6 +67,7 @@ async function browse(req, res) {
 
   const { data, error, count } = await listingsService.searchListings({
     categoryIds: parseCategoryIds(req.query.category_id),
+    seasons: season.seasons,
     minPrice: Number.isFinite(minPrice) ? minPrice : undefined,
     maxPrice: Number.isFinite(maxPrice) ? maxPrice : undefined,
     q: req.query.q,
@@ -88,7 +117,12 @@ async function create(req, res) {
     return res.status(400).json({ error: 'title, price, and stock are required' });
   }
 
-  const { data, error } = await listingsService.createListing(req.user.id, req.body);
+  const { seasons, error: seasonsError } = parseSeasonsField(req.body.seasons);
+  if (seasonsError) {
+    return res.status(400).json({ error: seasonsError });
+  }
+
+  const { data, error } = await listingsService.createListing(req.user.id, { ...req.body, seasons });
   if (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -123,7 +157,12 @@ async function update(req, res) {
     return res.status(400).json({ error: 'title cannot be empty' });
   }
 
-  const { data, error } = await listingsService.updateListing(listing.id, req.body);
+  const { seasons, error: seasonsError } = parseSeasonsField(req.body.seasons);
+  if (seasonsError) {
+    return res.status(400).json({ error: seasonsError });
+  }
+
+  const { data, error } = await listingsService.updateListing(listing.id, { ...req.body, seasons });
   if (error) {
     return res.status(400).json({ error: error.message });
   }

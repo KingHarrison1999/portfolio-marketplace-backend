@@ -1,9 +1,13 @@
 const supabase = require('../lib/db');
 
-const UPDATABLE_FIELDS = ['title', 'description', 'price', 'condition', 'stock', 'category_id', 'status'];
+const UPDATABLE_FIELDS = ['title', 'description', 'price', 'condition', 'stock', 'category_id', 'status', 'seasons'];
+
+// listings.seasons holds zero or more of these, in this order (a CHECK
+// constraint enforces the same set at the DB level).
+const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 
 async function createListing(sellerId, fields) {
-  const { title, description, price, condition, stock, category_id: categoryId } = fields;
+  const { title, description, price, condition, stock, category_id: categoryId, seasons } = fields;
 
   const { data, error } = await supabase
     .from('listings')
@@ -15,6 +19,7 @@ async function createListing(sellerId, fields) {
       condition,
       stock,
       category_id: categoryId,
+      seasons,
     })
     .select()
     .single();
@@ -108,7 +113,7 @@ function toIlikePattern(term) {
 // browse. See searchListings() below.
 const NEW_ARRIVALS_COUNT = 16;
 
-async function searchListings({ categoryIds, minPrice, maxPrice, q, sort, page, limit, collection }) {
+async function searchListings({ categoryIds, seasons, minPrice, maxPrice, q, sort, page, limit, collection }) {
   // Ignores category/price/search/sort/pagination inputs entirely -- it's
   // always "the newest N active listings, full stop", not something you
   // browse deeper into.
@@ -145,6 +150,10 @@ async function searchListings({ categoryIds, minPrice, maxPrice, q, sort, page, 
 
   if (categoryIds && categoryIds.length > 0) {
     query = query.in('category_id', categoryIds);
+  }
+  // Any of the requested seasons (array overlap).
+  if (seasons && seasons.length > 0) {
+    query = query.overlaps('seasons', seasons);
   }
   if (minPrice !== undefined) {
     query = query.gte('price', minPrice);
@@ -255,4 +264,5 @@ module.exports = {
   getSellerDashboard,
   searchListings,
   getAllListingsForAdmin,
+  SEASONS,
 };

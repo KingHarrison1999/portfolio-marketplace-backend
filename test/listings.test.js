@@ -313,3 +313,86 @@ test('dashboard no longer counts the removed listing as active', async () => {
   assert.equal(res.status, 200);
   assert.equal(res.body.total_active_listings, 0);
 });
+
+// --- Seasons ---
+
+let seasonalListingId;
+
+test('creating a listing stores seasons deduplicated, in spring-to-winter order', async () => {
+  const res = await request(app).post('/api/listings').set('Authorization', `Bearer ${sellerA.token}`).send({
+    title: 'Test Seasonal Linen Shirt',
+    price: 15,
+    stock: 1,
+    category_id: categoryId,
+    seasons: ['summer', 'spring', 'summer'],
+  });
+  assert.equal(res.status, 201);
+  assert.deepEqual(res.body.listing.seasons, ['spring', 'summer']);
+  seasonalListingId = res.body.listing.id;
+  createdListingIds.push(seasonalListingId);
+});
+
+test('a listing created without seasons gets an empty array', async () => {
+  const res = await request(app)
+    .post('/api/listings')
+    .set('Authorization', `Bearer ${sellerA.token}`)
+    .send({ title: 'Test Seasonless Belt', price: 5, stock: 1, category_id: categoryId });
+  assert.equal(res.status, 201);
+  assert.deepEqual(res.body.listing.seasons, []);
+  createdListingIds.push(res.body.listing.id);
+});
+
+test('creating a listing with an unknown season is rejected with 400', async () => {
+  const res = await request(app)
+    .post('/api/listings')
+    .set('Authorization', `Bearer ${sellerA.token}`)
+    .send({ title: 'Test Bad Season', price: 5, stock: 1, seasons: ['monsoon'] });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /seasons must be/);
+});
+
+test('PATCH validates seasons and leaves them alone when omitted', async () => {
+  const bad = await request(app)
+    .patch(`/api/listings/${seasonalListingId}`)
+    .set('Authorization', `Bearer ${sellerA.token}`)
+    .send({ seasons: 'summer' });
+  assert.equal(bad.status, 400);
+
+  const set = await request(app)
+    .patch(`/api/listings/${seasonalListingId}`)
+    .set('Authorization', `Bearer ${sellerA.token}`)
+    .send({ seasons: ['winter', 'autumn'], status: 'active' });
+  assert.equal(set.status, 200);
+  assert.deepEqual(set.body.listing.seasons, ['autumn', 'winter']);
+
+  const untouched = await request(app)
+    .patch(`/api/listings/${seasonalListingId}`)
+    .set('Authorization', `Bearer ${sellerA.token}`)
+    .send({ price: 16 });
+  assert.equal(untouched.status, 200);
+  assert.deepEqual(untouched.body.listing.seasons, ['autumn', 'winter']);
+});
+
+test('GET /api/listings filters by season (any match), combined with category, price and search', async () => {
+  const ids = async (query) => {
+    const res = await request(app).get(`/api/listings?category_id=${categoryId}&${query}`);
+    assert.equal(res.status, 200);
+    return res.body.listings.map((l) => l.id);
+  };
+
+  assert.ok((await ids('season=autumn')).includes(seasonalListingId));
+  assert.ok(!(await ids('season=summer')).includes(seasonalListingId));
+  assert.ok((await ids('season=summer&season=winter')).includes(seasonalListingId));
+  assert.ok((await ids('season=winter&max_price=20&q=linen&sort=price_asc')).includes(seasonalListingId));
+  assert.ok(!(await ids('season=winter&max_price=10')).includes(seasonalListingId));
+  assert.ok(!(await ids('season=winter&q=velvet')).includes(seasonalListingId));
+
+  const res = await request(app).get('/api/listings?season=autumn');
+  assert.ok(res.body.listings.every((l) => l.seasons.includes('autumn')));
+});
+
+test('GET /api/listings rejects an unknown season with 400', async () => {
+  const res = await request(app).get('/api/listings?season=monsoon');
+  assert.equal(res.status, 400);
+});
+
