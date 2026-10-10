@@ -158,8 +158,9 @@ async function searchListings({ categoryIds, seasons, minPrice, maxPrice, q, sor
   if (minPrice !== undefined) {
     query = query.gte('price', minPrice);
   }
+  // Strictly below: the site words max_price as "Under £50".
   if (maxPrice !== undefined) {
-    query = query.lte('price', maxPrice);
+    query = query.lt('price', maxPrice);
   }
   if (q) {
     const term = sanitizeSearchTerm(q);

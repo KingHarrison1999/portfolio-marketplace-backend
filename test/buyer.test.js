@@ -215,6 +215,13 @@ test('browse: filters by price range', async () => {
   assert.ok(!res.body.listings.some((l) => l.id === listingA.id));
 });
 
+test('browse: max_price is strictly less than ("Under £50" excludes £50)', async () => {
+  const res = await request(app).get('/api/listings').query({ max_price: 50 });
+  assert.equal(res.status, 200);
+  assert.ok(!res.body.listings.some((l) => l.id === listingB.id), 'price 50 is not under 50');
+  assert.ok(res.body.listings.some((l) => l.id === listingA.id), 'price 20 is under 50');
+});
+
 test('browse: free-text search matches title', async () => {
   const res = await request(app).get('/api/listings').query({ q: 'Alpha' });
   assert.equal(res.status, 200);
